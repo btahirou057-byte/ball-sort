@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ball Sort</title>
+<style>
+:root{--bg:#1d2350;--bg2:#070a1f;--ink:#fff;--pill:rgba(255,255,255,.14);--b:min(11.5vw,54px);box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141a40;--bg2:#04061a}}
+:root[data-theme="dark"]{--bg:#141a40;--bg2:#04061a}
+*,*::before,*::after{box-sizing:inherit}
+html{height:100%;background:radial-gradient(110% 70% at 50% 0,var(--bg),var(--bg2)) fixed,var(--bg2)}
+body{height:100%;margin:0 auto;max-width:520px;display:flex;flex-direction:column;color:var(--ink);font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif;user-select:none;-webkit-user-select:none;touch-action:manipulation}
+header{display:flex;gap:8px;justify-content:space-between;align-items:center;padding:12px}
+.pill{background:var(--pill);border-radius:999px;padding:7px 14px;font:700 15px "Trebuchet MS",system-ui,sans-serif;color:var(--ink);border:0}
+button{cursor:pointer}
+button:focus-visible{outline:3px solid #fff;outline-offset:2px}
+main{flex:1;display:flex;align-items:center;justify-content:center;padding:0 10px}
+#tubes{display:grid;gap:26px 12px;justify-content:center}
+.tube{width:calc(var(--b) + 12px);height:calc(var(--b)*4 + 22px);padding:6px;border:0;display:flex;flex-direction:column-reverse;gap:3px;border-radius:6px 6px calc(var(--b)*.6) calc(var(--b)*.6);background:linear-gradient(90deg,rgba(255,255,255,.16),rgba(255,255,255,.04) 45%,rgba(255,255,255,.12));box-shadow:inset 0 0 0 2px rgba(220,226,255,.55)}
+.tube.sel{translate:0 -16px;box-shadow:inset 0 0 0 3px #fff}
+.tube.no{animation:no .3s}
+@keyframes no{25%{translate:-6px 0}75%{translate:6px 0}}
+.ball{width:var(--b);height:var(--b);border-radius:50%;background:radial-gradient(circle at 34% 28%,rgba(255,255,255,.95) 0 9%,rgba(255,255,255,.2) 10% 22%,transparent 23%),radial-gradient(circle at 50% 45%,var(--c) 55%,rgba(0,0,0,.45) 100%)}
+.ball.h{--c:#5a6296;display:grid;place-items:center;font-weight:700;font-size:calc(var(--b)*.5);color:#fff}
+footer{display:flex;gap:10px;justify-content:center;padding:14px 12px 18px}
+#ov{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(4,6,26,.88);padding:24px}
+#ov[hidden]{display:none}
+.box{max-width:340px;text-align:center}
+.box h1{font-size:34px;margin:0 0 10px}
+.box p{margin:0 0 20px;line-height:1.45;font-size:17px;color:#cfd5ff}
+.box button{border:0;border-radius:999px;padding:14px 36px;font:700 19px "Trebuchet MS",system-ui,sans-serif;background:#ffd21a;color:#2a1a00}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01s!important}}
+</style>
+</head>
+<body>
+<header>
+  <div class="pill" id="lv">Niveau 1</div>
+  <div class="pill" id="mv">Coups : 0</div>
+</header>
+<main><div id="tubes"></div></main>
+<footer>
+  <button class="pill" id="un">Annuler</button>
+  <button class="pill" id="rs">Recommencer</button>
+</footer>
+<div id="ov">
+  <div class="box">
+    <h1 id="t">Ball Sort</h1>
+    <p id="p">Touche un tube, puis un autre pour y déplacer les billes du dessus. Pose-les sur un tube vide ou sur la même couleur. Les billes « ? » se dévoilent quand elles arrivent au-dessus. Mets une seule couleur par tube.</p>
+    <button id="go">Jouer</button>
+  </div>
+</div>
+<script>
+const COL=["#e63946","#2f7bff","#ffd21a","#25c46a","#ff8a1f","#a15cff","#ff5fb0","#2fd3e8"];
+const CAP=4,$=s=>document.querySelector(s);
+let T=[],sel=-1,moves=0,level=1,hist=[],live=false;
+$('#go').onclick=()=>start();
+$('#rs').onclick=()=>start();
+$('#un').onclick=undo;
+
+function start(){
+  const nc=Math.min(3+level,8),pool=[];
+  for(let i=0;i<nc;i++)for(let k=0;k<CAP;k++)pool.push(i);
+  for(let i=pool.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[pool[i],pool[j]]=[pool[j],pool[i]]}
+  T=[];
+  for(let i=0;i<nc;i++)T.push(pool.slice(i*CAP,(i+1)*CAP).map(c=>({c,h:false})));
+  if(level>=2)T.forEach(t=>{if(Math.random()<.6)t.forEach((b,i)=>{if(i<t.length-1)b.h=true})});
+  T.push([],[]);
+  sel=-1;moves=0;hist=[];live=true;
+  $('#ov').hidden=true;
+  draw();
+}
+function draw(){
+  const box=$('#tubes');
+  box.textContent='';
+  box.style.gridTemplateColumns='repeat('+(T.length>5?Math.ceil(T.length/2):T.length)+',auto)';
+  T.forEach((tube,i)=>{
+    const b=document.createElement('button');
+    b.className='tube'+(i===sel?' sel':'');
+    b.setAttribute('aria-label','Tube '+(i+1));
+    tube.forEach(x=>{
+      const d=document.createElement('div');
+      d.className='ball'+(x.h?' h':'');
+      d.style.setProperty('--c',COL[x.c]);
+      if(x.h)d.textContent='?';
+      b.append(d);
+    });
+    b.onclick=()=>tap(i);
+    box.append(b);
+  });
+  $('#lv').textContent='Niveau '+level;
+  $('#mv').textContent='Coups : '+moves;
+}
+function tap(i){
+  if(!live)return;
+  if(sel<0){if(T[i].length)sel=i;draw();return}
+  if(sel===i){sel=-1;draw();return}
+  const snap=JSON.stringify(T);
+  if(move(sel,i)){hist.push(snap);sel=-1;moves++;reveal();draw();if(won())end()}
+  else{sel=-1;draw();$('#tubes').children[i].classList.add('no')}
+}
+function move(a,b){
+  const s=T[a],d=T[b];
+  if(!s.length||d.length>=CAP)return false;
+  const v=s[s.length-1].c;
+  if(d.length&&d[d.length-1].c!==v)return false;
+  while(s.length&&s[s.length-1].c===v&&!s[s.length-1].h&&d.length<CAP)d.push(s.pop());
+  return true;
+}
+function reveal(){
+  T.forEach(t=>{
+    if(t.length)t[t.length-1].h=false;
+    if(t.length===CAP&&t.every(x=>x.c===t[0].c))t.forEach(x=>x.h=false);
+  });
+}
+function undo(){
+  if(!live||!hist.length)return;
+  T=JSON.parse(hist.pop());
+  sel=-1;moves=Math.max(0,moves-1);
+  draw();
+}
+function won(){return T.every(t=>t.length===0||(t.length===CAP&&t.every(x=>x.c===t[0].c)))}
+function end(){
+  live=false;
+  level++;
+  $('#t').textContent='Niveau gagné !';
+  $('#p').textContent='Bravo, tout est trié en '+moves+' coups. Le niveau suivant a une couleur de plus (jusqu’à 8).';
+  $('#go').textContent='Niveau suivant';
+  $('#ov').hidden=false;
+  $('#go').focus();
+}
+</script>
+</body>
+  </html>
