@@ -23,6 +23,11 @@ jobs:
           cp index.html www/index.html
       - name: Add Android
         run: npx cap add android
+      - name: App icon
+        run: |
+          mkdir -p assets
+          cp icon.png assets/icon-only.png
+          npx --yes @capacitor/assets generate --android --iconBackgroundColor '#141a40' --iconBackgroundColorDark '#141a40'
       - name: Sync
         run: npx cap sync android
       - name: Build debug APK
