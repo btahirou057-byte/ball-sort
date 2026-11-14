@@ -25,9 +25,12 @@ jobs:
         run: npx cap add android
       - name: App icon
         run: |
-          mkdir -p assets
-          cp icon.png assets/icon-only.png
-          npx --yes @capacitor/assets generate --android --iconBackgroundColor '#141a40' --iconBackgroundColorDark '#141a40'
+          for d in android/app/src/main/res/mipmap-*; do
+            case "$d" in
+              *anydpi*) rm -f "$d/ic_launcher.xml" "$d/ic_launcher_round.xml" ;;
+              *) cp icon.png "$d/ic_launcher.png"; cp icon.png "$d/ic_launcher_round.png" ;;
+            esac
+          done
       - name: Sync
         run: npx cap sync android
       - name: Build debug APK
