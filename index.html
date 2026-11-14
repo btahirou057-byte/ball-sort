@@ -37,6 +37,7 @@ footer{display:flex;gap:10px;justify-content:center;padding:14px 12px 18px}
 <header>
   <div class="pill" id="lv">Niveau 1</div>
   <div class="pill" id="mv">Coups : 0</div>
+  <button class="pill" id="sd" aria-label="Son">🔊</button>
 </header>
 <main><div id="tubes"></div></main>
 <footer>
@@ -57,6 +58,27 @@ let T=[],sel=-1,moves=0,level=1,hist=[],live=false;
 $('#go').onclick=()=>start();
 $('#rs').onclick=()=>start();
 $('#un').onclick=undo;
+let AC=null,mute=false;
+function tone(f,d,type,v,dl){
+  if(mute)return;
+  try{
+    AC=AC||new (window.AudioContext||window.webkitAudioContext)();
+    if(AC.state==='suspended')AC.resume();
+    const t=AC.currentTime+(dl||0),o=AC.createOscillator(),g=AC.createGain();
+    o.type=type||'sine';o.frequency.setValueAtTime(f,t);
+    g.gain.setValueAtTime(v||.18,t);g.gain.exponentialRampToValueAtTime(.001,t+d);
+    o.connect(g);g.connect(AC.destination);o.start(t);o.stop(t+d);
+  }catch(e){}
+}
+const SFX={
+  sel:()=>tone(520,.09,'sine'),
+  off:()=>tone(380,.07,'sine'),
+  drop:()=>{tone(660,.1,'triangle');tone(880,.12,'triangle',.16,.08)},
+  no:()=>tone(150,.22,'sawtooth',.12),
+  undo:()=>tone(420,.1,'triangle'),
+  win:()=>[523,659,784,1047].forEach((f,i)=>tone(f,.25,'triangle',.18,i*.12))
+};
+$('#sd').onclick=()=>{mute=!mute;$('#sd').textContent=mute?'🔇':'🔊';if(!mute)SFX.sel()};
 addEventListener('resize',()=>{if(T.length)fit()});
 function fit(){
   const m=$('main'),box=$('#tubes'),W=m.clientWidth-20,H=m.clientHeight-10,n=T.length;
@@ -93,7 +115,7 @@ function draw(){
     tube.forEach(x=>{
       const d=document.createElement('div');
       d.className='ball'+(x.h?' h':'');
-      d.style.setProperty('--c',COL[x.c]);
+      d.style.setProperty('--c',x.h?'#5a6296':COL[x.c]);
       if(x.h)d.textContent='?';
       b.append(d);
     });
@@ -105,11 +127,11 @@ function draw(){
 }
 function tap(i){
   if(!live)return;
-  if(sel<0){if(T[i].length)sel=i;draw();return}
-  if(sel===i){sel=-1;draw();return}
+  if(sel<0){if(T[i].length){sel=i;SFX.sel()}draw();return}
+  if(sel===i){sel=-1;SFX.off();draw();return}
   const snap=JSON.stringify(T);
-  if(move(sel,i)){hist.push(snap);sel=-1;moves++;reveal();draw();if(won())end()}
-  else{sel=-1;draw();$('#tubes').children[i].classList.add('no')}
+  if(move(sel,i)){hist.push(snap);sel=-1;moves++;reveal();draw();if(won())end();else SFX.drop()}
+  else{sel=-1;SFX.no();draw();$('#tubes').children[i].classList.add('no')}
 }
 function move(a,b){
   const s=T[a],d=T[b];
@@ -128,12 +150,14 @@ function reveal(){
 function undo(){
   if(!live||!hist.length)return;
   T=JSON.parse(hist.pop());
+  SFX.undo();
   sel=-1;moves=Math.max(0,moves-1);
   draw();
 }
 function won(){return T.every(t=>t.length===0||(t.length===CAP&&t.every(x=>x.c===t[0].c)))}
 function end(){
   live=false;
+  SFX.win();
   level++;
   $('#t').textContent='Niveau gagné !';
   $('#p').textContent='Bravo, tout est trié en '+moves+' coups. Le niveau suivant a une couleur de plus (jusqu’à 8).';
