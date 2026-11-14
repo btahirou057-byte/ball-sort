@@ -15,7 +15,7 @@ header{display:flex;gap:8px;justify-content:space-between;align-items:center;pad
 .pill{background:var(--pill);border-radius:999px;padding:7px 14px;font:700 15px "Trebuchet MS",system-ui,sans-serif;color:var(--ink);border:0}
 button{cursor:pointer}
 button:focus-visible{outline:3px solid #fff;outline-offset:2px}
-main{flex:1;display:flex;align-items:center;justify-content:center;padding:0 10px}
+main{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:0 10px}
 #tubes{display:grid;gap:26px 12px;justify-content:center}
 .tube{width:calc(var(--b) + 12px);height:calc(var(--b)*4 + 22px);padding:6px;border:0;display:flex;flex-direction:column-reverse;gap:3px;border-radius:6px 6px calc(var(--b)*.6) calc(var(--b)*.6);background:linear-gradient(90deg,rgba(255,255,255,.16),rgba(255,255,255,.04) 45%,rgba(255,255,255,.12));box-shadow:inset 0 0 0 2px rgba(220,226,255,.55)}
 .tube.sel{translate:0 -16px;box-shadow:inset 0 0 0 3px #fff}
@@ -57,6 +57,18 @@ let T=[],sel=-1,moves=0,level=1,hist=[],live=false;
 $('#go').onclick=()=>start();
 $('#rs').onclick=()=>start();
 $('#un').onclick=undo;
+addEventListener('resize',()=>{if(T.length)fit()});
+function fit(){
+  const m=$('main'),box=$('#tubes'),W=m.clientWidth-20,H=m.clientHeight-10,n=T.length;
+  let best=30,rows=1;
+  for(let r=1;r<=3;r++){
+    const k=Math.ceil(n/r);
+    const b=Math.min((W-(k-1)*12)/k-12,((H-(r-1)*26)/r-22)/4,80);
+    if(b>best){best=b;rows=r}
+  }
+  box.style.setProperty('--b',Math.floor(best)+'px');
+  box.style.gridTemplateColumns='repeat('+Math.ceil(n/rows)+',auto)';
+}
 
 function start(){
   const nc=Math.min(3+level,8),pool=[];
@@ -73,7 +85,7 @@ function start(){
 function draw(){
   const box=$('#tubes');
   box.textContent='';
-  box.style.gridTemplateColumns='repeat('+(T.length>5?Math.ceil(T.length/2):T.length)+',auto)';
+  fit();
   T.forEach((tube,i)=>{
     const b=document.createElement('button');
     b.className='tube'+(i===sel?' sel':'');
@@ -131,4 +143,4 @@ function end(){
 }
 </script>
 </body>
-  </html>
+</html>
