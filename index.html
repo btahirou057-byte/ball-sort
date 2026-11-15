@@ -59,6 +59,7 @@ footer{display:flex;gap:8px;justify-content:center;padding:14px 12px 18px}
     <div class="btns">
       <button id="cont" hidden>Continuer +10 coups · 20 🪙</button>
       <button id="wad" class="wad" hidden>📺 Pub : +20 🪙</button>
+      <button id="uo" class="alt" hidden>↩ Annuler le dernier coup</button>
       <button id="go">Jouer</button>
     </div>
   </div>
@@ -86,6 +87,14 @@ $('#cont').onclick=()=>{
   losing=false;live=true;
   $('#ov').hidden=true;
   draw();SFX.sel();
+};
+$('#uo').onclick=()=>{
+  if(!hist.length)return;
+  T=JSON.parse(hist.pop());
+  moves=Math.max(0,moves-1);sel=-1;
+  losing=false;live=true;
+  $('#ov').hidden=true;
+  draw();SFX.undo();
 };
 $('#wad').onclick=async()=>{
   const ok=await watchAd();
@@ -182,6 +191,45 @@ function fit(){
   box.style.gridTemplateColumns='repeat('+Math.ceil(n/rows)+',auto)';
 }
 
+/* ---- Détection des blocages (solveur) ---- */
+function toInt(S){return S.map(t=>t.map(x=>x.c*2+(x.h?1:0)))}
+function skey(S){return S.map(t=>t.join(',')).sort().join('|')}
+function ssolved(S){return S.every(t=>t.length===0||(t.length===CAP&&t.every(x=>(x>>1)===(t[0]>>1))))}
+function sstep(S,a,b){
+  const s=S[a],d=S[b];
+  if(!s.length||d.length>=CAP)return null;
+  const top=s[s.length-1],v=top>>1;
+  if(top&1)return null;
+  if(d.length&&(d[d.length-1]>>1)!==v)return null;
+  const uniform=s.every(x=>(x>>1)===v&&!(x&1));
+  if(uniform&&d.length===0)return null;
+  const S2=S.map(t=>t.slice()),s2=S2[a],d2=S2[b];
+  while(s2.length&&(s2[s2.length-1]>>1)===v&&!(s2[s2.length-1]&1)&&d2.length<CAP)d2.push(s2.pop());
+  S2.forEach(t=>{
+    if(t.length)t[t.length-1]&=~1;
+    if(t.length===CAP&&t.every(x=>(x>>1)===(t[0]>>1)))for(let i=0;i<t.length;i++)t[i]&=~1;
+  });
+  return S2;
+}
+function canWin(start,cap){
+  const seen=new Set([skey(start)]),stack=[start];
+  let n=0;
+  while(stack.length){
+    const S=stack.pop();
+    if(ssolved(S))return true;
+    if(++n>cap)return true;
+    for(let a=0;a<S.length;a++)for(let b=0;b<S.length;b++){
+      if(a===b)continue;
+      const S2=sstep(S,a,b);
+      if(!S2)continue;
+      const k=skey(S2);
+      if(seen.has(k))continue;
+      seen.add(k);stack.push(S2);
+    }
+  }
+  return false;
+}
+
 function start(){
   const nc=Math.min(3+level,8),pool=[];
   for(let i=0;i<nc;i++)for(let k=0;k<CAP;k++)pool.push(i);
@@ -192,7 +240,7 @@ function start(){
   T.push([],[]);
   sel=-1;moves=0;hist=[];live=true;losing=false;kind='moves';
   limit=limitFor();
-  $('#cont').hidden=true;$('#wad').hidden=true;
+  $('#cont').hidden=true;$('#wad').hidden=true;$('#uo').hidden=true;
   $('#go').classList.remove('alt');
   $('#ov').hidden=true;
   draw();
@@ -228,7 +276,7 @@ function tap(i){
     hist.push(snap);sel=-1;moves++;reveal();draw();
     if(won())end();
     else if(moves>=limit)lose('moves');
-    else if(!hasMove())lose('stuck');
+    else if(!hasMove()||!canWin(toInt(T),15000))lose('stuck');
     else SFX.drop();
   }else{sel=-1;SFX.no();draw();$('#tubes').children[i].classList.add('no')}
 }
@@ -278,13 +326,20 @@ function lose(k){
 function showLose(){
   const can=coins>=20,stuck=kind==='stuck';
   $('#t').textContent=stuck?'Bloqué !':'Plus de coups';
-  const what=stuck?'Plus aucun mouvement possible. Ajoute un tube vide':'Continue avec 10 coups de plus';
-  $('#p').textContent=can
-    ?what+' pour 20 pièces, ou recommence le niveau.'
-    :(AdMob?'Il te faut 20 pièces. Regarde une pub pour en gagner 20 !':'Il te faut 20 pièces. Recommence le niveau.');
+  let msg;
+  if(stuck){
+    msg='Ce niveau ne peut plus être gagné. Annule ton dernier coup (gratuit)'
+      +(can?', ajoute un tube vide pour 20 pièces, ou recommence.'
+        :(AdMob?', ou regarde une pub pour gagner 20 pièces et ajouter un tube vide.':' ou recommence.'));
+  }else{
+    msg=can?'Continue avec 10 coups de plus pour 20 pièces, ou recommence le niveau.'
+      :(AdMob?'Il te faut 20 pièces. Regarde une pub pour en gagner 20 !':'Il te faut 20 pièces. Recommence le niveau.');
+  }
+  $('#p').textContent=msg;
   $('#cont').textContent=stuck?'➕ Tube vide · 20 🪙':'Continuer +10 coups · 20 🪙';
   $('#cont').hidden=!can;
   $('#wad').hidden=!AdMob;
+  $('#uo').hidden=!(stuck&&hist.length>0);
   $('#go').textContent='Recommencer';
   $('#go').classList.add('alt');
   $('#co').textContent='🪙 '+coins;
@@ -298,7 +353,7 @@ function end(){
   $('#co').textContent='🪙 '+coins;
   $('#t').textContent='Niveau gagné !';
   $('#p').textContent='Bravo ! +'+gain+' pièces (dont '+bonus+' de bonus) en '+moves+' coups. Total : '+coins+' pièces.';
-  $('#cont').hidden=true;$('#wad').hidden=true;
+  $('#cont').hidden=true;$('#wad').hidden=true;$('#uo').hidden=true;
   $('#go').classList.remove('alt');
   $('#go').textContent='Niveau suivant';
   $('#ov').hidden=false;
