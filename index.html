@@ -23,7 +23,9 @@ main{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;
 @keyframes no{25%{translate:-6px 0}75%{translate:6px 0}}
 .ball{width:var(--b);height:var(--b);border-radius:50%;background:radial-gradient(circle at 34% 28%,rgba(255,255,255,.95) 0 9%,rgba(255,255,255,.2) 10% 22%,transparent 23%),radial-gradient(circle at 50% 45%,var(--c) 55%,rgba(0,0,0,.45) 100%)}
 .ball.h{--c:#5a6296;display:grid;place-items:center;font-weight:700;font-size:calc(var(--b)*.5);color:#fff}
-footer{display:flex;gap:10px;justify-content:center;padding:14px 12px 18px}
+footer{display:flex;gap:8px;justify-content:center;padding:14px 12px 18px}
+#toast{position:fixed;left:50%;bottom:90px;translate:-50% 0;background:rgba(255,255,255,.95);color:#1a1030;font:700 15px "Trebuchet MS",system-ui,sans-serif;padding:10px 18px;border-radius:999px;z-index:5}
+#toast[hidden]{display:none}
 #ov{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(4,6,26,.88);padding:24px}
 #ov[hidden]{display:none}
 .box{max-width:340px;text-align:center}
@@ -44,7 +46,9 @@ footer{display:flex;gap:10px;justify-content:center;padding:14px 12px 18px}
 <footer>
   <button class="pill" id="un">Annuler</button>
   <button class="pill" id="rs">Recommencer</button>
+  <button class="pill" id="ad" hidden>📺 +20 🪙</button>
 </footer>
+<div id="toast" hidden></div>
 <div id="ov">
   <div class="box">
     <h1 id="t">Ball Sort</h1>
@@ -53,6 +57,9 @@ footer{display:flex;gap:10px;justify-content:center;padding:14px 12px 18px}
   </div>
 </div>
 <script>
+const ADS_TEST=true;
+const BANNER_ID="ca-app-pub-6458265700599669/6073722120";
+const REWARD_ID="ca-app-pub-6458265700599669/2054586060";
 const COL=["#e63946","#2f7bff","#ffd21a","#25c46a","#ff8a1f","#a15cff","#ff5fb0","#2fd3e8"];
 const CAP=4,$=s=>document.querySelector(s);
 let T=[],sel=-1,moves=0,level=1,hist=[],live=false,coins=0;
@@ -63,6 +70,7 @@ $('#co').textContent='🪙 '+coins;
 $('#go').onclick=()=>start();
 $('#rs').onclick=()=>start();
 $('#un').onclick=undo;
+$('#ad').onclick=watchAd;
 let AC=null,mute=false;
 function tone(f,d,type,v,dl){
   if(mute)return;
@@ -84,6 +92,46 @@ const SFX={
   win:()=>[523,659,784,1047].forEach((f,i)=>tone(f,.25,'triangle',.18,i*.12))
 };
 $('#sd').onclick=()=>{mute=!mute;$('#sd').textContent=mute?'🔇':'🔊';if(!mute)SFX.sel()};
+
+/* ---- Pubs (AdMob) ---- */
+const NATIVE=!!(window.Capacitor&&Capacitor.isNativePlatform&&Capacitor.isNativePlatform());
+const AdMob=(NATIVE&&Capacitor.Plugins&&Capacitor.Plugins.AdMob)||null;
+let adBusy=false,rewarded=false,tt=0;
+function toast(msg){
+  const t=$('#toast');
+  t.textContent=msg;t.hidden=false;
+  clearTimeout(tt);tt=setTimeout(()=>{t.hidden=true},2600);
+}
+async function initAds(){
+  if(!AdMob)return;
+  try{
+    await AdMob.initialize({initializeForTesting:ADS_TEST});
+    AdMob.addListener('onRewardedVideoAdReward',()=>{rewarded=true});
+    $('#ad').hidden=false;
+    document.body.style.paddingBottom='70px';
+    if(T.length)fit();
+    await AdMob.showBanner({adId:BANNER_ID,adSize:'ADAPTIVE_BANNER',position:'BOTTOM_CENTER',margin:0,isTesting:ADS_TEST});
+  }catch(e){}
+}
+async function watchAd(){
+  if(!AdMob||adBusy)return;
+  adBusy=true;rewarded=false;
+  try{
+    await AdMob.prepareRewardVideoAd({adId:REWARD_ID,isTesting:ADS_TEST});
+    const r=await AdMob.showRewardVideoAd();
+    if(rewarded||(r&&(r.amount||r.type))){
+      coins+=20;save();
+      $('#co').textContent='🪙 '+coins;
+      SFX.win();
+      toast('+20 pièces !');
+    }
+  }catch(e){
+    toast('Pub indisponible, réessaie plus tard.');
+  }
+  adBusy=false;
+}
+initAds();
+
 addEventListener('resize',()=>{if(T.length)fit()});
 function fit(){
   const m=$('main'),box=$('#tubes'),W=m.clientWidth-20,H=m.clientHeight-10,n=T.length;
@@ -175,4 +223,4 @@ function end(){
 }
 </script>
 </body>
-  </html>
+</html>
