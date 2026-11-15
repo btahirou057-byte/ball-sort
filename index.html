@@ -11,7 +11,7 @@
 *,*::before,*::after{box-sizing:inherit}
 html{height:100%;background:radial-gradient(110% 70% at 50% 0,var(--bg),var(--bg2)) fixed,var(--bg2)}
 body{height:100%;margin:0 auto;max-width:520px;display:flex;flex-direction:column;color:var(--ink);font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif;user-select:none;-webkit-user-select:none;touch-action:manipulation}
-header{display:flex;gap:6px;justify-content:space-between;align-items:center;padding:12px}
+header{display:flex;gap:6px;justify-content:space-between;align-items:center;padding:12px 8px}
 .pill{background:var(--pill);border-radius:999px;padding:7px 11px;font:700 14px "Trebuchet MS",system-ui,sans-serif;color:var(--ink);border:0}
 button{cursor:pointer}
 button:focus-visible{outline:3px solid #fff;outline-offset:2px}
@@ -26,12 +26,16 @@ main{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;
 footer{display:flex;gap:8px;justify-content:center;padding:14px 12px 18px}
 #toast{position:fixed;left:50%;bottom:90px;translate:-50% 0;background:rgba(255,255,255,.95);color:#1a1030;font:700 15px "Trebuchet MS",system-ui,sans-serif;padding:10px 18px;border-radius:999px;z-index:5}
 #toast[hidden]{display:none}
-#ov{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(4,6,26,.88);padding:24px}
+#ov{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(4,6,26,.9);padding:24px}
 #ov[hidden]{display:none}
 .box{max-width:340px;text-align:center}
 .box h1{font-size:34px;margin:0 0 10px}
 .box p{margin:0 0 20px;line-height:1.45;font-size:17px;color:#cfd5ff}
-.box button{border:0;border-radius:999px;padding:14px 36px;font:700 19px "Trebuchet MS",system-ui,sans-serif;background:#ffd21a;color:#2a1a00}
+.btns{display:flex;flex-direction:column;gap:10px;align-items:center}
+.box button{border:0;border-radius:999px;padding:14px 30px;font:700 18px "Trebuchet MS",system-ui,sans-serif;background:#ffd21a;color:#2a1a00}
+.box button.wad{background:#fff;color:#1a1030}
+.box button.alt{background:rgba(255,255,255,.18);color:#fff}
+.box button[hidden]{display:none}
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01s!important}}
 </style>
 </head>
@@ -39,21 +43,24 @@ footer{display:flex;gap:8px;justify-content:center;padding:14px 12px 18px}
 <header>
   <div class="pill" id="lv">Niveau 1</div>
   <div class="pill" id="co">🪙 0</div>
-  <div class="pill" id="mv">Coups : 0</div>
+  <div class="pill" id="mv">Coups 0</div>
   <button class="pill" id="sd" aria-label="Son">🔊</button>
 </header>
 <main><div id="tubes"></div></main>
 <footer>
   <button class="pill" id="un">Annuler</button>
   <button class="pill" id="rs">Recommencer</button>
-  <button class="pill" id="ad" hidden>📺 +20 🪙</button>
 </footer>
 <div id="toast" hidden></div>
 <div id="ov">
   <div class="box">
     <h1 id="t">Ball Sort</h1>
-    <p id="p">Touche un tube, puis un autre pour y déplacer les billes du dessus. Pose-les sur un tube vide ou sur la même couleur. Les billes « ? » se dévoilent quand elles arrivent au-dessus. Mets une seule couleur par tube.</p>
-    <button id="go">Jouer</button>
+    <p id="p">Touche un tube, puis un autre pour y déplacer les billes du dessus. Pose-les sur un tube vide ou sur la même couleur. Les billes « ? » se dévoilent quand elles arrivent au-dessus. Mets une seule couleur par tube, avant la fin des coups !</p>
+    <div class="btns">
+      <button id="cont" hidden>Continuer +10 coups · 20 🪙</button>
+      <button id="wad" class="wad" hidden>📺 Pub : +20 🪙</button>
+      <button id="go">Jouer</button>
+    </div>
   </div>
 </div>
 <script>
@@ -62,15 +69,27 @@ const BANNER_ID="ca-app-pub-6458265700599669/6073722120";
 const REWARD_ID="ca-app-pub-6458265700599669/2054586060";
 const COL=["#e63946","#2f7bff","#ffd21a","#25c46a","#ff8a1f","#a15cff","#ff5fb0","#2fd3e8"];
 const CAP=4,$=s=>document.querySelector(s);
-let T=[],sel=-1,moves=0,level=1,hist=[],live=false,coins=0;
+let T=[],sel=-1,moves=0,level=1,hist=[],live=false,coins=0,limit=0,losing=false;
 try{coins=+localStorage.getItem('bs_coins')||0;level=+localStorage.getItem('bs_level')||1}catch(e){}
 function save(){try{localStorage.setItem('bs_coins',coins);localStorage.setItem('bs_level',level)}catch(e){}}
+function limitFor(){return Math.min(3+level,8)*7}
+limit=limitFor();
 $('#lv').textContent='Niveau '+level;
 $('#co').textContent='🪙 '+coins;
 $('#go').onclick=()=>start();
 $('#rs').onclick=()=>start();
 $('#un').onclick=undo;
-$('#ad').onclick=watchAd;
+$('#cont').onclick=()=>{
+  if(coins<20)return;
+  coins-=20;limit+=10;save();
+  losing=false;live=true;
+  $('#ov').hidden=true;
+  draw();SFX.sel();
+};
+$('#wad').onclick=async()=>{
+  const ok=await watchAd();
+  if(ok&&losing)showLose();
+};
 let AC=null,mute=false;
 function tone(f,d,type,v,dl){
   if(mute)return;
@@ -107,15 +126,15 @@ async function initAds(){
   try{
     await AdMob.initialize({initializeForTesting:ADS_TEST});
     AdMob.addListener('onRewardedVideoAdReward',()=>{rewarded=true});
-    $('#ad').hidden=false;
     document.body.style.paddingBottom='70px';
     if(T.length)fit();
     await AdMob.showBanner({adId:BANNER_ID,adSize:'ADAPTIVE_BANNER',position:'BOTTOM_CENTER',margin:0,isTesting:ADS_TEST});
   }catch(e){}
 }
 async function watchAd(){
-  if(!AdMob||adBusy)return;
+  if(!AdMob||adBusy)return false;
   adBusy=true;rewarded=false;
+  let ok=false;
   try{
     await AdMob.prepareRewardVideoAd({adId:REWARD_ID,isTesting:ADS_TEST});
     const r=await AdMob.showRewardVideoAd();
@@ -124,11 +143,13 @@ async function watchAd(){
       $('#co').textContent='🪙 '+coins;
       SFX.win();
       toast('+20 pièces !');
+      ok=true;
     }
   }catch(e){
     toast('Pub indisponible, réessaie plus tard.');
   }
   adBusy=false;
+  return ok;
 }
 initAds();
 
@@ -153,7 +174,10 @@ function start(){
   for(let i=0;i<nc;i++)T.push(pool.slice(i*CAP,(i+1)*CAP).map(c=>({c,h:false})));
   if(level>=2)T.forEach(t=>{if(Math.random()<.6)t.forEach((b,i)=>{if(i<t.length-1)b.h=true})});
   T.push([],[]);
-  sel=-1;moves=0;hist=[];live=true;
+  sel=-1;moves=0;hist=[];live=true;losing=false;
+  limit=limitFor();
+  $('#cont').hidden=true;$('#wad').hidden=true;
+  $('#go').classList.remove('alt');
   $('#ov').hidden=true;
   draw();
 }
@@ -176,7 +200,7 @@ function draw(){
     box.append(b);
   });
   $('#lv').textContent='Niveau '+level;
-  $('#mv').textContent='Coups : '+moves;
+  $('#mv').textContent='Coups '+moves+'/'+limit;
   $('#co').textContent='🪙 '+coins;
 }
 function tap(i){
@@ -184,8 +208,12 @@ function tap(i){
   if(sel<0){if(T[i].length){sel=i;SFX.sel()}draw();return}
   if(sel===i){sel=-1;SFX.off();draw();return}
   const snap=JSON.stringify(T);
-  if(move(sel,i)){hist.push(snap);sel=-1;moves++;reveal();draw();if(won())end();else SFX.drop()}
-  else{sel=-1;SFX.no();draw();$('#tubes').children[i].classList.add('no')}
+  if(move(sel,i)){
+    hist.push(snap);sel=-1;moves++;reveal();draw();
+    if(won())end();
+    else if(moves>=limit)lose();
+    else SFX.drop();
+  }else{sel=-1;SFX.no();draw();$('#tubes').children[i].classList.add('no')}
 }
 function move(a,b){
   const s=T[a],d=T[b];
@@ -209,14 +237,34 @@ function undo(){
   draw();
 }
 function won(){return T.every(t=>t.length===0||(t.length===CAP&&t.every(x=>x.c===t[0].c)))}
+function lose(){
+  live=false;losing=true;
+  SFX.no();
+  showLose();
+}
+function showLose(){
+  const can=coins>=20;
+  $('#t').textContent='Plus de coups';
+  $('#p').textContent=can
+    ?'Continue avec 10 coups de plus pour 20 pièces, ou recommence le niveau.'
+    :(AdMob?'Il te faut 20 pièces pour continuer. Regarde une pub pour en gagner 20 !':'Il te faut 20 pièces pour continuer. Recommence le niveau.');
+  $('#cont').hidden=!can;
+  $('#wad').hidden=!AdMob;
+  $('#go').textContent='Recommencer';
+  $('#go').classList.add('alt');
+  $('#co').textContent='🪙 '+coins;
+  $('#ov').hidden=false;
+}
 function end(){
-  live=false;
+  live=false;losing=false;
   SFX.win();
   const nc=Math.min(3+level,8),bonus=Math.max(0,nc*4-moves),gain=10+bonus;
   coins+=gain;level++;save();
   $('#co').textContent='🪙 '+coins;
   $('#t').textContent='Niveau gagné !';
   $('#p').textContent='Bravo ! +'+gain+' pièces (dont '+bonus+' de bonus) en '+moves+' coups. Total : '+coins+' pièces.';
+  $('#cont').hidden=true;$('#wad').hidden=true;
+  $('#go').classList.remove('alt');
   $('#go').textContent='Niveau suivant';
   $('#ov').hidden=false;
   $('#go').focus();
