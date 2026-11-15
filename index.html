@@ -69,7 +69,7 @@ const BANNER_ID="ca-app-pub-6458265700599669/6073722120";
 const REWARD_ID="ca-app-pub-6458265700599669/2054586060";
 const COL=["#e63946","#2f7bff","#ffd21a","#25c46a","#ff8a1f","#a15cff","#ff5fb0","#2fd3e8"];
 const CAP=4,$=s=>document.querySelector(s);
-let T=[],sel=-1,moves=0,level=1,hist=[],live=false,coins=0,limit=0,losing=false;
+let T=[],sel=-1,moves=0,level=1,hist=[],live=false,coins=0,limit=0,losing=false,kind='moves';
 try{coins=+localStorage.getItem('bs_coins')||0;level=+localStorage.getItem('bs_level')||1}catch(e){}
 function save(){try{localStorage.setItem('bs_coins',coins);localStorage.setItem('bs_level',level)}catch(e){}}
 function limitFor(){return Math.min(3+level,8)*7}
@@ -81,7 +81,8 @@ $('#rs').onclick=()=>start();
 $('#un').onclick=undo;
 $('#cont').onclick=()=>{
   if(coins<20)return;
-  coins-=20;limit+=10;save();
+  coins-=20;save();
+  if(kind==='stuck'){T.push([])}else{limit+=10}
   losing=false;live=true;
   $('#ov').hidden=true;
   draw();SFX.sel();
@@ -174,7 +175,7 @@ function start(){
   for(let i=0;i<nc;i++)T.push(pool.slice(i*CAP,(i+1)*CAP).map(c=>({c,h:false})));
   if(level>=2)T.forEach(t=>{if(Math.random()<.6)t.forEach((b,i)=>{if(i<t.length-1)b.h=true})});
   T.push([],[]);
-  sel=-1;moves=0;hist=[];live=true;losing=false;
+  sel=-1;moves=0;hist=[];live=true;losing=false;kind='moves';
   limit=limitFor();
   $('#cont').hidden=true;$('#wad').hidden=true;
   $('#go').classList.remove('alt');
@@ -211,7 +212,8 @@ function tap(i){
   if(move(sel,i)){
     hist.push(snap);sel=-1;moves++;reveal();draw();
     if(won())end();
-    else if(moves>=limit)lose();
+    else if(moves>=limit)lose('moves');
+    else if(!hasMove())lose('stuck');
     else SFX.drop();
   }else{sel=-1;SFX.no();draw();$('#tubes').children[i].classList.add('no')}
 }
@@ -222,6 +224,22 @@ function move(a,b){
   if(d.length&&d[d.length-1].c!==v)return false;
   while(s.length&&s[s.length-1].c===v&&!s[s.length-1].h&&d.length<CAP)d.push(s.pop());
   return true;
+}
+function hasMove(){
+  for(let a=0;a<T.length;a++){
+    const s=T[a];
+    if(!s.length)continue;
+    const v=s[s.length-1].c;
+    const mixed=s.some(x=>x.c!==v||x.h);
+    for(let b=0;b<T.length;b++){
+      if(a===b)continue;
+      const d=T[b];
+      if(d.length>=CAP)continue;
+      if(d.length===0){if(mixed)return true}
+      else if(d[d.length-1].c===v)return true;
+    }
+  }
+  return false;
 }
 function reveal(){
   T.forEach(t=>{
@@ -237,17 +255,19 @@ function undo(){
   draw();
 }
 function won(){return T.every(t=>t.length===0||(t.length===CAP&&t.every(x=>x.c===t[0].c)))}
-function lose(){
-  live=false;losing=true;
+function lose(k){
+  live=false;losing=true;kind=k;
   SFX.no();
   showLose();
 }
 function showLose(){
-  const can=coins>=20;
-  $('#t').textContent='Plus de coups';
+  const can=coins>=20,stuck=kind==='stuck';
+  $('#t').textContent=stuck?'Bloqué !':'Plus de coups';
+  const what=stuck?'Plus aucun mouvement possible. Ajoute un tube vide':'Continue avec 10 coups de plus';
   $('#p').textContent=can
-    ?'Continue avec 10 coups de plus pour 20 pièces, ou recommence le niveau.'
-    :(AdMob?'Il te faut 20 pièces pour continuer. Regarde une pub pour en gagner 20 !':'Il te faut 20 pièces pour continuer. Recommence le niveau.');
+    ?what+' pour 20 pièces, ou recommence le niveau.'
+    :(AdMob?'Il te faut 20 pièces. Regarde une pub pour en gagner 20 !':'Il te faut 20 pièces. Recommence le niveau.');
+  $('#cont').textContent=stuck?'➕ Tube vide · 20 🪙':'Continuer +10 coups · 20 🪙';
   $('#cont').hidden=!can;
   $('#wad').hidden=!AdMob;
   $('#go').textContent='Recommencer';
