@@ -116,22 +116,36 @@ $('#sd').onclick=()=>{mute=!mute;$('#sd').textContent=mute?'🔇':'🔊';if(!mut
 /* ---- Pubs (AdMob) ---- */
 const NATIVE=!!(window.Capacitor&&Capacitor.isNativePlatform&&Capacitor.isNativePlatform());
 const AdMob=(NATIVE&&Capacitor.Plugins&&Capacitor.Plugins.AdMob)||null;
-let adBusy=false,rewarded=false,tt=0;
+let adBusy=false,rewarded=false,tt=0,adsReady=false;
 function toast(msg){
   const t=$('#toast');
   t.textContent=msg;t.hidden=false;
   clearTimeout(tt);tt=setTimeout(()=>{t.hidden=true},2600);
 }
+async function showBannerAd(){
+  if(!AdMob||!adsReady)return;
+  try{
+    try{await AdMob.removeBanner()}catch(e){}
+    await AdMob.showBanner({adId:BANNER_ID,adSize:'ADAPTIVE_BANNER',position:'BOTTOM_CENTER',margin:0,isTesting:ADS_TEST});
+  }catch(e){
+    setTimeout(showBannerAd,30000);
+  }
+}
 async function initAds(){
   if(!AdMob)return;
   try{
     await AdMob.initialize({initializeForTesting:ADS_TEST});
+    adsReady=true;
     AdMob.addListener('onRewardedVideoAdReward',()=>{rewarded=true});
+    AdMob.addListener('bannerAdFailedToLoad',()=>{setTimeout(showBannerAd,30000)});
     document.body.style.paddingBottom='70px';
     if(T.length)fit();
-    await AdMob.showBanner({adId:BANNER_ID,adSize:'ADAPTIVE_BANNER',position:'BOTTOM_CENTER',margin:0,isTesting:ADS_TEST});
+    showBannerAd();
   }catch(e){}
 }
+document.addEventListener('visibilitychange',()=>{
+  if(!document.hidden)setTimeout(showBannerAd,1000);
+});
 async function watchAd(){
   if(!AdMob||adBusy)return false;
   adBusy=true;rewarded=false;
@@ -150,6 +164,7 @@ async function watchAd(){
     toast('Pub indisponible, réessaie plus tard.');
   }
   adBusy=false;
+  setTimeout(showBannerAd,1000);
   return ok;
 }
 initAds();
