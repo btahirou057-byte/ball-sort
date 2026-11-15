@@ -31,6 +31,10 @@ jobs:
               *) cp icon.png "$d/ic_launcher.png"; cp icon.png "$d/ic_launcher_round.png" ;;
             esac
           done
+      - name: AdMob setup
+        run: |
+          sed -i 's/minSdkVersion = 22/minSdkVersion = 23/' android/variables.gradle
+          sed -i 's#</application>#<meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-6458265700599669~5634563416"/></application>#' android/app/src/main/AndroidManifest.xml
       - name: Sync
         run: npx cap sync android
       - name: Build debug APK
